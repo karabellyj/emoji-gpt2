@@ -30,6 +30,7 @@ import re
 import shutil
 from typing import Dict, List, Tuple
 
+import emoji
 import numpy as np
 import torch
 from torch.nn.utils.rnn import pad_sequence
@@ -711,6 +712,9 @@ def main():
             "You are instantiating a new {} tokenizer. This is not supported, but you can do it from another script, save it,"
             "and load it from here, using --tokenizer_name".format(tokenizer_class.__name__)
         )
+
+    # add emojis to tokenizer
+    tokenizer.add_tokens(emoji.UNICODE_EMOJI.keys())
 
     if args.block_size <= 0:
         args.block_size = tokenizer.max_len
