@@ -714,7 +714,7 @@ def main():
         )
 
     # add emojis to tokenizer
-    tokenizer.add_tokens(emoji.UNICODE_EMOJI.keys())
+    tokenizer.add_tokens(list(emoji.UNICODE_EMOJI.keys()))
 
     if args.block_size <= 0:
         args.block_size = tokenizer.max_len
