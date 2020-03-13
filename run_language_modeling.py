@@ -19,12 +19,10 @@ GPT and GPT-2 are fine-tuned using a causal language modeling (CLM) loss while B
 using a masked language modeling (MLM) loss.
 """
 
-
 import argparse
 import glob
 import logging
 import os
-import pickle
 import random
 import re
 import shutil
@@ -37,92 +35,28 @@ from torch.nn.utils.rnn import pad_sequence
 from torch.utils.data import DataLoader, Dataset, RandomSampler, SequentialSampler
 from torch.utils.data.distributed import DistributedSampler
 from tqdm import tqdm, trange
-
 from transformers import (
     WEIGHTS_NAME,
     AdamW,
-    BertConfig,
-    BertForMaskedLM,
-    BertTokenizer,
-    CamembertConfig,
-    CamembertForMaskedLM,
-    CamembertTokenizer,
-    DistilBertConfig,
-    DistilBertForMaskedLM,
-    DistilBertTokenizer,
-    GPT2Config,
-    GPT2LMHeadModel,
     GPT2Tokenizer,
-    OpenAIGPTConfig,
-    OpenAIGPTLMHeadModel,
-    OpenAIGPTTokenizer,
     PreTrainedModel,
     PreTrainedTokenizer,
-    RobertaConfig,
-    RobertaForMaskedLM,
-    RobertaTokenizer,
     get_linear_schedule_with_warmup,
 )
 
+from config import GPT2EmojiConfig
+from model import GPT2LMEmojiModel
 
 try:
     from torch.utils.tensorboard import SummaryWriter
 except ImportError:
     from tensorboardX import SummaryWriter
 
-
 logger = logging.getLogger(__name__)
 
-
 MODEL_CLASSES = {
-    "gpt2": (GPT2Config, GPT2LMHeadModel, GPT2Tokenizer),
-    "openai-gpt": (OpenAIGPTConfig, OpenAIGPTLMHeadModel, OpenAIGPTTokenizer),
-    "bert": (BertConfig, BertForMaskedLM, BertTokenizer),
-    "roberta": (RobertaConfig, RobertaForMaskedLM, RobertaTokenizer),
-    "distilbert": (DistilBertConfig, DistilBertForMaskedLM, DistilBertTokenizer),
-    "camembert": (CamembertConfig, CamembertForMaskedLM, CamembertTokenizer),
+    "gpt2": (GPT2EmojiConfig, GPT2LMEmojiModel, GPT2Tokenizer),
 }
-
-
-class TextDataset(Dataset):
-    def __init__(self, tokenizer: PreTrainedTokenizer, args, file_path: str, block_size=512):
-        assert os.path.isfile(file_path)
-
-        block_size = block_size - (tokenizer.max_len - tokenizer.max_len_single_sentence)
-
-        directory, filename = os.path.split(file_path)
-        cached_features_file = os.path.join(
-            directory, args.model_type + "_cached_lm_" + str(block_size) + "_" + filename
-        )
-
-        if os.path.exists(cached_features_file) and not args.overwrite_cache:
-            logger.info("Loading features from cached file %s", cached_features_file)
-            with open(cached_features_file, "rb") as handle:
-                self.examples = pickle.load(handle)
-        else:
-            logger.info("Creating features from dataset file at %s", directory)
-
-            self.examples = []
-            with open(file_path, encoding="utf-8") as f:
-                text = f.read()
-
-            tokenized_text = tokenizer.convert_tokens_to_ids(tokenizer.tokenize(text))
-
-            for i in range(0, len(tokenized_text) - block_size + 1, block_size):  # Truncate in block of block_size
-                self.examples.append(tokenizer.build_inputs_with_special_tokens(tokenized_text[i : i + block_size]))
-            # Note that we are loosing the last truncated example here for the sake of simplicity (no padding)
-            # If your dataset is small, first you should loook for a bigger one :-) and second you
-            # can change this behavior by adding (model specific) padding.
-
-            logger.info("Saving features into cached file %s", cached_features_file)
-            with open(cached_features_file, "wb") as handle:
-                pickle.dump(self.examples, handle, protocol=pickle.HIGHEST_PROTOCOL)
-
-    def __len__(self):
-        return len(self.examples)
-
-    def __getitem__(self, item):
-        return torch.tensor(self.examples[item], dtype=torch.long)
 
 
 class LineByLineTextDataset(Dataset):
@@ -147,10 +81,7 @@ class LineByLineTextDataset(Dataset):
 
 def load_and_cache_examples(args, tokenizer, evaluate=False):
     file_path = args.eval_data_file if evaluate else args.train_data_file
-    if args.line_by_line:
-        return LineByLineTextDataset(tokenizer, args, file_path=file_path, block_size=args.block_size)
-    else:
-        return TextDataset(tokenizer, args, file_path=file_path, block_size=args.block_size)
+    return LineByLineTextDataset(tokenizer, args, file_path=file_path, block_size=args.block_size)
 
 
 def set_seed(args):
@@ -231,6 +162,14 @@ def mask_tokens(inputs: torch.Tensor, tokenizer: PreTrainedTokenizer, args) -> T
     return inputs, labels
 
 
+def targets_mask(inputs: torch.Tensor, tokenizer: PreTrainedTokenizer) -> Tuple[torch.Tensor, torch.Tensor]:
+    targets = torch.tensor(list(tokenizer.added_tokens_decoder.keys()))
+    mask = np.isin(inputs.numpy(), targets.numpy())
+    labels = len(tokenizer) - inputs[torch.from_numpy(mask)]
+    mask = torch.from_numpy(np.c_[mask[:, 1:], np.full((inputs.size(0), 1), False)])
+    return labels, mask
+
+
 def train(args, train_dataset, model: PreTrainedModel, tokenizer: PreTrainedTokenizer) -> Tuple[int, float]:
     """ Train the model """
     if args.local_rank in [-1, 0]:
@@ -270,9 +209,9 @@ def train(args, train_dataset, model: PreTrainedModel, tokenizer: PreTrainedToke
 
     # Check if saved optimizer or scheduler states exist
     if (
-        args.model_name_or_path
-        and os.path.isfile(os.path.join(args.model_name_or_path, "optimizer.pt"))
-        and os.path.isfile(os.path.join(args.model_name_or_path, "scheduler.pt"))
+            args.model_name_or_path
+            and os.path.isfile(os.path.join(args.model_name_or_path, "optimizer.pt"))
+            and os.path.isfile(os.path.join(args.model_name_or_path, "scheduler.pt"))
     ):
         # Load in optimizer and scheduler states
         optimizer.load_state_dict(torch.load(os.path.join(args.model_name_or_path, "optimizer.pt")))
@@ -347,11 +286,14 @@ def train(args, train_dataset, model: PreTrainedModel, tokenizer: PreTrainedToke
                 steps_trained_in_current_epoch -= 1
                 continue
 
-            inputs, labels = mask_tokens(batch, tokenizer, args) if args.mlm else (batch, batch)
+            inputs = batch
+            labels, mask = targets_mask(inputs, tokenizer)
+
             inputs = inputs.to(args.device)
             labels = labels.to(args.device)
+            mask = mask.to(args.device)
             model.train()
-            outputs = model(inputs, masked_lm_labels=labels) if args.mlm else model(inputs, labels=labels)
+            outputs = model(inputs, labels=labels, inputs_mask=mask)
             loss = outputs[0]  # model outputs are always tuple in transformers (see doc)
 
             if args.n_gpu > 1:
@@ -379,7 +321,7 @@ def train(args, train_dataset, model: PreTrainedModel, tokenizer: PreTrainedToke
                 if args.local_rank in [-1, 0] and args.logging_steps > 0 and global_step % args.logging_steps == 0:
                     # Log metrics
                     if (
-                        args.local_rank == -1 and args.evaluate_during_training
+                            args.local_rank == -1 and args.evaluate_during_training
                     ):  # Only evaluate when single GPU otherwise metrics may not average well
                         results = evaluate(args, model, tokenizer)
                         for key, value in results.items():
@@ -431,6 +373,7 @@ def evaluate(args, model: PreTrainedModel, tokenizer: PreTrainedTokenizer, prefi
         os.makedirs(eval_output_dir, exist_ok=True)
 
     args.eval_batch_size = args.per_gpu_eval_batch_size * max(1, args.n_gpu)
+
     # Note that DistributedSampler samples randomly
 
     def collate(examples: List[torch.Tensor]):
@@ -456,12 +399,15 @@ def evaluate(args, model: PreTrainedModel, tokenizer: PreTrainedTokenizer, prefi
     model.eval()
 
     for batch in tqdm(eval_dataloader, desc="Evaluating"):
-        inputs, labels = mask_tokens(batch, tokenizer, args) if args.mlm else (batch, batch)
+        inputs = batch
+        labels, mask = targets_mask(inputs, tokenizer)
+
         inputs = inputs.to(args.device)
         labels = labels.to(args.device)
+        mask = mask.to(args.device)
 
         with torch.no_grad():
-            outputs = model(inputs, masked_lm_labels=labels) if args.mlm else model(inputs, labels=labels)
+            outputs = model(inputs, labels=labels, inputs_mask=mask)
             lm_loss = outputs[0]
             eval_loss += lm_loss.mean().item()
         nb_eval_steps += 1
@@ -550,8 +496,8 @@ def main():
         default=-1,
         type=int,
         help="Optional input sequence length after tokenization."
-        "The training dataset will be truncated in block of this size for training."
-        "Default to the model max input length for single sentence inputs (take into account special tokens).",
+             "The training dataset will be truncated in block of this size for training."
+             "Default to the model max input length for single sentence inputs (take into account special tokens).",
     )
     parser.add_argument("--do_train", action="store_true", help="Whether to run training.")
     parser.add_argument("--do_eval", action="store_true", help="Whether to run eval on the dev set.")
@@ -616,7 +562,7 @@ def main():
         type=str,
         default="O1",
         help="For fp16: Apex AMP optimization level selected in ['O0', 'O1', 'O2', and 'O3']."
-        "See details at https://nvidia.github.io/apex/amp.html",
+             "See details at https://nvidia.github.io/apex/amp.html",
     )
     parser.add_argument("--local_rank", type=int, default=-1, help="For distributed training: local_rank")
     parser.add_argument("--server_ip", type=str, default="", help="For distant debugging.")
@@ -641,10 +587,10 @@ def main():
             args.model_name_or_path = sorted_checkpoints[-1]
 
     if (
-        os.path.exists(args.output_dir)
-        and os.listdir(args.output_dir)
-        and args.do_train
-        and not args.overwrite_output_dir
+            os.path.exists(args.output_dir)
+            and os.listdir(args.output_dir)
+            and args.do_train
+            and not args.overwrite_output_dir
     ):
         raise ValueError(
             "Output directory ({}) already exists and is not empty. Use --overwrite_output_dir to overcome.".format(
