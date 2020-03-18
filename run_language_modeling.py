@@ -20,8 +20,10 @@ using a masked language modeling (MLM) loss.
 """
 
 import argparse
+import functools
 import glob
 import logging
+import operator
 import os
 import random
 import re
@@ -162,10 +164,10 @@ def mask_tokens(inputs: torch.Tensor, tokenizer: PreTrainedTokenizer, args) -> T
     return inputs, labels
 
 
-def targets_mask(inputs: torch.Tensor, tokenizer: PreTrainedTokenizer) -> Tuple[torch.Tensor, torch.Tensor]:
-    targets = torch.tensor(list(tokenizer.added_tokens_decoder.keys()))
-    mask = np.isin(inputs.numpy(), targets.numpy())
-    labels = len(tokenizer) - inputs[torch.from_numpy(mask)]
+def targets_mask(inputs: torch.Tensor, tokenizer: PreTrainedTokenizer, targets_map) -> Tuple[torch.Tensor, torch.Tensor]:
+    targets = torch.tensor(list(targets_map.keys()))
+    mask = np.c_[np.full((inputs.size(0), 1), False), np.isin(inputs[:, 1:].numpy(), targets.numpy())]
+    labels = torch.Tensor([targets_map[token.item()] for token in inputs[torch.from_numpy(mask)]]).long()
     mask = torch.from_numpy(np.c_[mask[:, 1:], np.full((inputs.size(0), 1), False)])
     return labels, mask
 
@@ -185,6 +187,10 @@ def train(args, train_dataset, model: PreTrainedModel, tokenizer: PreTrainedToke
     train_sampler = RandomSampler(train_dataset) if args.local_rank == -1 else DistributedSampler(train_dataset)
     train_dataloader = DataLoader(
         train_dataset, sampler=train_sampler, batch_size=args.train_batch_size, collate_fn=collate
+    )
+
+    map_token_id_to_target = dict(
+        zip(tokenizer.encode(list(emoji.UNICODE_EMOJI.keys())), range(1, len(emoji.UNICODE_EMOJI.keys()) + 1))
     )
 
     if args.max_steps > 0:
@@ -287,7 +293,7 @@ def train(args, train_dataset, model: PreTrainedModel, tokenizer: PreTrainedToke
                 continue
 
             inputs = batch
-            labels, mask = targets_mask(inputs, tokenizer)
+            labels, mask = targets_mask(inputs, tokenizer, map_token_id_to_target)
 
             inputs = inputs.to(args.device)
             labels = labels.to(args.device)
