@@ -392,6 +392,10 @@ def evaluate(args, model: PreTrainedModel, tokenizer: PreTrainedTokenizer, prefi
         eval_dataset, sampler=eval_sampler, batch_size=args.eval_batch_size, collate_fn=collate
     )
 
+    map_token_id_to_target = dict(
+        zip(tokenizer.encode(list(emoji.UNICODE_EMOJI.keys())), range(1, len(emoji.UNICODE_EMOJI.keys()) + 1))
+    )
+
     # multi-gpu evaluate
     if args.n_gpu > 1:
         model = torch.nn.DataParallel(model)
@@ -406,7 +410,7 @@ def evaluate(args, model: PreTrainedModel, tokenizer: PreTrainedTokenizer, prefi
 
     for batch in tqdm(eval_dataloader, desc="Evaluating"):
         inputs = batch
-        labels, mask = targets_mask(inputs, tokenizer)
+        labels, mask = targets_mask(inputs, tokenizer, map_token_id_to_target)
 
         inputs = inputs.to(args.device)
         labels = labels.to(args.device)
