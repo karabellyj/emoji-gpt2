@@ -190,7 +190,7 @@ def train(args, train_dataset, model: PreTrainedModel, tokenizer: PreTrainedToke
     )
 
     map_token_id_to_target = dict(
-        zip(tokenizer.encode(list(emoji.UNICODE_EMOJI.keys())), range(1, len(emoji.UNICODE_EMOJI.keys()) + 1))
+        zip(tokenizer.encode(list(emoji.UNICODE_EMOJI.keys())), range(0, len(emoji.UNICODE_EMOJI.keys())))
     )
 
     if args.max_steps > 0:
@@ -393,7 +393,7 @@ def evaluate(args, model: PreTrainedModel, tokenizer: PreTrainedTokenizer, prefi
     )
 
     map_token_id_to_target = dict(
-        zip(tokenizer.encode(list(emoji.UNICODE_EMOJI.keys())), range(1, len(emoji.UNICODE_EMOJI.keys()) + 1))
+        zip(tokenizer.encode(list(emoji.UNICODE_EMOJI.keys())), range(0, len(emoji.UNICODE_EMOJI.keys())))
     )
 
     # multi-gpu evaluate
