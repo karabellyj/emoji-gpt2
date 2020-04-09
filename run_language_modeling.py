@@ -396,6 +396,10 @@ def evaluate(args, model: PreTrainedModel, tokenizer: PreTrainedTokenizer, prefi
         zip(tokenizer.encode(list(emoji.UNICODE_EMOJI.keys())), range(0, len(emoji.UNICODE_EMOJI.keys())))
     )
 
+    map_target_to_token_id = dict(
+        zip(range(0, len(emoji.UNICODE_EMOJI.keys())), tokenizer.encode(list(emoji.UNICODE_EMOJI.keys())))
+    )
+
     # multi-gpu evaluate
     if args.n_gpu > 1:
         model = torch.nn.DataParallel(model)
