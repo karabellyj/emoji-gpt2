@@ -66,6 +66,7 @@ def evaluate(config, eval_dataset, model, tokenizer):
     model.eval()  # turn on the eval() switch to disable dropout
     total_loss = 0
     total_correct = 0
+    total = 0
 
     for (inputs, targets) in tqdm(eval_dataloader, desc='Evaluating'):
         with torch.no_grad():
@@ -77,8 +78,9 @@ def evaluate(config, eval_dataset, model, tokenizer):
 
             total_loss += criterion(output_flat, targets).item()
             prediction = torch.argmax(output_flat, dim=1)
-            total_correct += torch.sum((prediction == targets).float())
-    return total_loss / (len(eval_dataloader) // config['batch_size']), total_correct / len(eval_dataloader)
+            total += targets.size(0)
+            total_correct += torch.sum((prediction == targets).float()).item()
+    return total_loss / len(eval_dataloader), total_correct / total
 
 
 def set_seed(seed):
