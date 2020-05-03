@@ -53,7 +53,7 @@ class GPT2LMEmojiModel(GPT2PreTrainedModel):
 
         lm_logits = self.lm_head(hidden_states)
 
-        outputs = (lm_logits,) + transformer_outputs[1:]
+        outputs = (lm_logits, hidden_states) + transformer_outputs[1:]
         if labels is not None and inputs_mask is not None:
             logits = lm_logits[inputs_mask].contiguous()
 
