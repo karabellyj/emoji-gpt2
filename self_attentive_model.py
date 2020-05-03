@@ -14,13 +14,13 @@ class SelfAttention(nn.Module):
         self.ws1 = nn.Linear(input_size, att_unit, bias=False)
         self.ws2 = nn.Linear(att_unit, att_hops, bias=False)
         self.tanh = nn.Tanh()
-        self.softmax = nn.Softmax()
+        self.softmax = nn.Softmax(dim=-1)
 
     def forward(self, x):
         out = self.tanh(self.ws1(x))
         out = self.ws2(out)
 
-        att = self.softmax(out.permute(0, 2, 1), dim=-1)
+        att = self.softmax(out.permute(0, 2, 1))
         output = torch.bmm(att, x)
         return output, att
 
