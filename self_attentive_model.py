@@ -1,6 +1,6 @@
 import torch
 import torch.nn as nn
-from transformers import GPT2Tokenizer
+from transformers import GPT2Tokenizer, GPT2Model, GPT2Config
 
 from config import GPT2EmojiConfig
 from model import GPT2LMEmojiModel
@@ -36,6 +36,52 @@ class SelfAttentiveEmojiGPT2(nn.Module):
         self.att_encoder = SelfAttention(self.gpt_config.output_size, config['attention-unit'],
                                          config['attention-hops'])
         self.fc = nn.Linear(self.gpt_config.output_size * config['attention-hops'], config['nfc'])
+        self.tanh = nn.Tanh()
+        self.pred = nn.Linear(config['nfc'], config['classes'])
+        self.drop = nn.Dropout(config['dropout'])
+
+    def forward(self, inputs):
+        out = self.gpt(inputs)[0]
+        out, att = self.att_encoder(out)
+        out = self.tanh(self.fc(self.drop(out.view(out.size(0), -1))))
+        preds = self.pred(self.drop(out))
+
+        return preds, att
+
+
+class SelfAttentiveEmojiGPT2Embed(nn.Module):
+
+    def __init__(self, config) -> None:
+        super().__init__()
+        self.gpt_config = config_class.from_pretrained(config['model_path'])
+        self.gpt_tokenizer = tokenizer_class.from_pretrained(config['model_path'])
+
+        self.gpt = model_class.from_pretrained(config['model_path'], config=self.gpt_config)
+        self.att_encoder = SelfAttention(self.gpt_config.n_embd, config['attention-unit'],
+                                         config['attention-hops'])
+        self.fc = nn.Linear(self.gpt_config.n_embd * config['attention-hops'], config['nfc'])
+        self.tanh = nn.Tanh()
+        self.pred = nn.Linear(config['nfc'], config['classes'])
+        self.drop = nn.Dropout(config['dropout'])
+
+    def forward(self, inputs):
+        out = self.gpt(inputs)[1]
+        out, att = self.att_encoder(out)
+        out = self.tanh(self.fc(self.drop(out.view(out.size(0), -1))))
+        preds = self.pred(self.drop(out))
+
+        return preds, att
+
+
+class SelfAttentiveGPT2(nn.Module):
+    def __init__(self, config) -> None:
+        super().__init__()
+        self.gpt_config = GPT2Config()
+
+        self.gpt = GPT2Model.from_pretrained('gpt2', config=self.gpt_config)
+        self.att_encoder = SelfAttention(self.gpt_config.n_embd, config['attention-unit'],
+                                         config['attention-hops'])
+        self.fc = nn.Linear(self.gpt_config.n_embd * config['attention-hops'], config['nfc'])
         self.tanh = nn.Tanh()
         self.pred = nn.Linear(config['nfc'], config['classes'])
         self.drop = nn.Dropout(config['dropout'])
