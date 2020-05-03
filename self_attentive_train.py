@@ -73,10 +73,10 @@ def evaluate(config, eval_dataset, model, tokenizer):
             targets = targets.to(config['device'])
 
             output, attention = model(inputs)
-            output_flat = output.view(inputs.size(1), -1)
+            output_flat = output.view(inputs.size(0), -1)
 
             total_loss += criterion(output_flat, targets).item()
-            prediction = torch.max(output_flat, 1)[1]
+            prediction = torch.argmax(output_flat, dim=1)
             total_correct += torch.sum((prediction == targets).float())
     return total_loss / (len(eval_dataloader) // config['batch_size']), total_correct / len(eval_dataloader)
 
@@ -165,7 +165,7 @@ def train(config, train_dataset, eval_dataset, model, tokenizer):
                 total_loss = 0
                 total_pure_loss = 0
                 start_time = time.time()
-
+            break
         evaluate_start_time = time.time()
         val_loss, acc = evaluate(config, eval_dataset, model, tokenizer)
         print('-' * 89)
