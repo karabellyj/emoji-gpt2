@@ -15,7 +15,7 @@ from torch.utils.data.dataset import Dataset
 from tqdm import trange, tqdm
 from transformers import GPT2Tokenizer
 
-from self_attentive_model import Classifier, SelfAttentiveEmojiGPT2
+from self_attentive_model import SelfAttentiveEmojiGPT2
 from sst_binary import sst_binary
 
 logger = logging.getLogger(__name__)
@@ -145,9 +145,10 @@ def train(config, train_dataset, eval_dataset, model, tokenizer):
             loss = criterion(output.view(data.size(0), -1), targets)
             total_pure_loss += loss.item()
 
-            attentionT = torch.transpose(attention, 1, 2).contiguous()
-            extra_loss = Frobenius(torch.bmm(attention, attentionT) - I[:attention.size(0)])
-            loss += config['penalization_coeff'] * extra_loss
+            attentionT = attention.permute(0, 2, 1).contiguous()
+            diversity_penalty = torch.bmm(attention, attentionT) - torch.eye(attention.size(1), device=config['device'])
+
+            loss += config['penalization_coeff'] * diversity_penalty.norm(dim=(1, 2))
 
             loss.backward()
             optimizer.step()
