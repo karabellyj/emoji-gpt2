@@ -19,6 +19,7 @@ from self_attentive_model import Classifier
 from sst_binary import sst_binary
 
 logger = logging.getLogger(__name__)
+logger.setLevel(logging.DEBUG)
 
 
 class CustomDataset(Dataset):
