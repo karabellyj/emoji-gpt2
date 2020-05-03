@@ -165,7 +165,6 @@ def train(config, train_dataset, eval_dataset, model, tokenizer):
                 total_loss = 0
                 total_pure_loss = 0
                 start_time = time.time()
-            break
         evaluate_start_time = time.time()
         val_loss, acc = evaluate(config, eval_dataset, model, tokenizer)
         print('-' * 89)
