@@ -120,6 +120,8 @@ def train(config, train_dataset, eval_dataset, model, tokenizer):
         for j in range(config['attention_hops']):
             I.data[i][j][j] = 1
 
+    I = I.to(config['device'])
+
     set_seed(config['seed'])
 
     train_iterator = trange(
