@@ -68,6 +68,9 @@ def evaluate(config, eval_dataset, model, tokenizer):
 
     for (inputs, targets) in tqdm(eval_dataloader, desc='Evaluating'):
         with torch.no_grad():
+            inputs = inputs.to(config['device'])
+            targets = targets.to(config['device'])
+
             output, attention = model(inputs)
             output_flat = output.view(inputs.size(1), -1)
 
@@ -129,6 +132,9 @@ def train(config, train_dataset, eval_dataset, model, tokenizer):
         start_time = time.time()
         for step, batch in enumerate(epoch_iterator):
             data, targets = batch
+
+            data = data.to(config['device'])
+            targets = targets.to(config['device'])
 
             output, attention = model(data)
             loss = criterion(output.view(data.size(0), -1), targets)
@@ -213,6 +219,8 @@ def get_args():
         "--num_train_epochs", default=1.0, type=float, help="Total number of training epochs to perform."
     )
 
+    parser.add_argument('--no_cuda', action='store_true', help='Avoid using CUDA when available')
+
     return parser.parse_args()
 
 
@@ -220,6 +228,8 @@ if __name__ == '__main__':
     args = get_args()
     config = vars(args)
 
+    device = torch.device("cuda" if torch.cuda.is_available() and not args.no_cuda else "cpu")
+    config['device'] = device
     model = Classifier({
         'dropout': args.dropout,
         'attention-unit': args.attention_unit,
@@ -227,7 +237,7 @@ if __name__ == '__main__':
         'nfc': args.nfc,
         'classes': args.classes,
         'model_path': args.model_path
-    })
+    }).to(device)
 
     tokenizer = GPT2Tokenizer.from_pretrained(config['model_path'])
     gpt_args = torch.load(os.path.join(config['model_path'], 'training_args.bin'))
