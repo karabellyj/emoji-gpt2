@@ -15,7 +15,7 @@ from torch.utils.data.dataset import Dataset
 from tqdm import trange, tqdm
 from transformers import GPT2Tokenizer
 
-from self_attentive_model import Classifier
+from self_attentive_model import Classifier, SelfAttentiveEmojiGPT2
 from sst_binary import sst_binary
 
 logger = logging.getLogger(__name__)
@@ -237,7 +237,7 @@ if __name__ == '__main__':
 
     logger.info(f'Device: {device}')
 
-    model = Classifier({
+    model = SelfAttentiveEmojiGPT2({
         'dropout': args.dropout,
         'attention-unit': args.attention_unit,
         'attention-hops': args.attention_hops,

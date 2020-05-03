@@ -8,6 +8,47 @@ from model import GPT2LMEmojiModel
 config_class, model_class, tokenizer_class = (GPT2EmojiConfig, GPT2LMEmojiModel, GPT2Tokenizer)
 
 
+class SelfAttention(nn.Module):
+    def __init__(self, input_size, att_unit, att_hops):
+        super().__init__()
+        self.ws1 = nn.Linear(input_size, att_unit, bias=False)
+        self.ws2 = nn.Linear(att_unit, att_hops, bias=False)
+        self.tanh = nn.Tanh()
+        self.softmax = nn.Softmax()
+
+    def forward(self, x):
+        out = self.tanh(self.ws1(x))
+        out = self.ws2(out)
+
+        att = self.softmax(out.permute(0, 2, 1))
+        output = torch.bmm(att, out)
+        return output, att
+
+
+class SelfAttentiveEmojiGPT2(nn.Module):
+
+    def __init__(self, config) -> None:
+        super().__init__()
+        self.gpt_config = config_class.from_pretrained(config['model_path'])
+        self.gpt_tokenizer = tokenizer_class.from_pretrained(config['model_path'])
+
+        self.gpt = model_class.from_pretrained(config['model_path'], config=self.gpt_config)
+        self.att_encoder = SelfAttention(self.gpt_config.output_size, config['attention-unit'],
+                                         config['attention-hops'])
+        self.fc = nn.Linear(self.gpt_config.output_size * config['attention-hops'], config['nfc'])
+        self.tanh = nn.Tanh()
+        self.pred = nn.Linear(config['nfc'], config['classes'])
+        self.drop = nn.Dropout(config['dropout'])
+
+    def forward(self, inputs):
+        out = self.gpt(inputs)[0]
+        out, att = self.att_encoder(out)
+        out = self.tanh(self.fc(self.drop(out.flatten())))
+        preds = self.pred(self.drop(out))
+
+        return preds, att
+
+
 class SelfAttentiveEncoder(nn.Module):
     def __init__(self, config) -> None:
         super().__init__()
