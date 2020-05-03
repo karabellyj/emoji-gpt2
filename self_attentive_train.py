@@ -148,7 +148,7 @@ def train(config, train_dataset, eval_dataset, model, tokenizer):
             attentionT = attention.permute(0, 2, 1).contiguous()
             diversity_penalty = torch.bmm(attention, attentionT) - torch.eye(attention.size(1), device=config['device'])
 
-            loss += config['penalization_coeff'] * diversity_penalty.norm(dim=(1, 2))
+            loss += config['penalization_coeff'] * (torch.sum(diversity_penalty.norm(dim=(1, 2))) / attention.size(0))
 
             loss.backward()
             optimizer.step()
