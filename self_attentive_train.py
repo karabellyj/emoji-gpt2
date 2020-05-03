@@ -230,6 +230,9 @@ if __name__ == '__main__':
 
     device = torch.device("cuda" if torch.cuda.is_available() and not args.no_cuda else "cpu")
     config['device'] = device
+
+    logger.info(f'Device: {device}')
+
     model = Classifier({
         'dropout': args.dropout,
         'attention-unit': args.attention_unit,
