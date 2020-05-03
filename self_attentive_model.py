@@ -35,7 +35,7 @@ class SelfAttentiveEmojiGPT2(nn.Module):
         self.gpt = model_class.from_pretrained(config['model_path'], config=self.gpt_config)
         self.att_encoder = SelfAttention(self.gpt_config.output_size, config['attention-unit'],
                                          config['attention-hops'])
-        self.fc = nn.Linear(self.gpt_config.output_size * config['attention-hops'], config['nfc'])
+        self.fc = nn.Linear(self.gpt_config.output_size, config['nfc'])
         self.tanh = nn.Tanh()
         self.pred = nn.Linear(config['nfc'], config['classes'])
         self.drop = nn.Dropout(config['dropout'])
