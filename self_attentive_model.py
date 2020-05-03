@@ -20,8 +20,8 @@ class SelfAttention(nn.Module):
         out = self.tanh(self.ws1(x))
         out = self.ws2(out)
 
-        att = self.softmax(out.permute(0, 2, 1))
-        output = torch.bmm(att, out)
+        att = self.softmax(out.permute(0, 2, 1), dim=-1)
+        output = torch.bmm(att, x)
         return output, att
 
 
