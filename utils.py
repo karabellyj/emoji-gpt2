@@ -160,3 +160,21 @@ def transform_max(X, model, tokenizer, args):
 
         probas.append(logits.max(0)[0].tolist())
     return probas
+
+
+def transform_gpt2(X, model, tokenizer):
+    X_ids = tokenize(X, tokenizer)
+    embed = []
+    for x in tqdm(X_ids):
+        output = model(torch.tensor(x).unsqueeze(0))[0].squeeze(0)
+        embed.append(output[-1].tolist())
+    return embed
+
+
+def transform_emoji(X, model, tokenizer):
+    X_ids = tokenize(X, tokenizer)
+    embed = []
+    for x in tqdm(X_ids):
+        output = model(torch.tensor(x).unsqueeze(0))[1].squeeze(0)
+        embed.append(output[-1].tolist())
+    return embed
